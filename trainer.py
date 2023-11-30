@@ -5,7 +5,9 @@ import torch
 import torch.distributed as dist 
 from torch.optim import Optimizer
 from torch.utils.data import DataLoader
+import os
 from tqdm import tqdm
+import logging
 
 from evaluate.lbfgs import encode_train_set, train_clf, test_clf
 from projection_heads.critic import LinearCritic
@@ -115,7 +117,7 @@ class Trainer():
 
         if self.lr_scheduler is not None:
             self.lr_scheduler.step()
-            print("lr:", self.scale_lr * self.lr_scheduler.get_last_lr()[0])
+            logging.info(f"lr: {self.scale_lr * self.lr_scheduler.get_last_lr()[0]}")
             
         return train_loss / len(self.trainloader)
 
@@ -130,9 +132,10 @@ class Trainer():
             
         return acc
 
-    def save_checkpoint(self, prefix):
+    def save_checkpoint(self, prefix, ckpt_dir='ckpt'):
+        os.makedirs(ckpt_dir, exist_ok=True)
         if self.world_size > 1:
-            torch.save(self.net.module, f"{prefix}-net.pt")
+            torch.save(self.net.module, os.path.join(ckpt_dir, f"{prefix}-net.pt"))
         else:
-            torch.save(self.net, f"{prefix}-net.pt")
-        torch.save(self.critic, f"{prefix}-critic.pt")
+            torch.save(self.net, os.path.join(ckpt_dir, f"{prefix}-net.pt"))
+        torch.save(self.critic, os.path.join(ckpt_dir, f"{prefix}-critic.pt"))

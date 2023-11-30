@@ -19,6 +19,8 @@ from projection_heads.critic import LinearCritic
 from resnet import *
 from trainer import Trainer
 from util import Random
+import logging
+from logger import get_logger, set_logger
 
 def main(rank: int, world_size: int, args):
 
@@ -31,20 +33,25 @@ def main(rank: int, world_size: int, args):
 
     # WandB Logging
     if not args.distributed or rank == 0:
+        logging.debug("Starting wandb")
         wandb.init(
             project="data-efficient-contrastive-learning",
             config=args
         )
+        wandb.run.name = args.name
+        wandb.save(os.path.join(args.log_dir_path, "params.txt"))
 
     if args.distributed:
         args.batch_size = int(args.batch_size / world_size)
 
     # Set all seeds
+    torch.backends.cudnn.deterministic = True 
+    torch.backends.cudnn.benchmark = False 
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
     Random(args.seed)
 
-    print('==> Preparing data..')
+    logging.info('==> Preparing data..')
     datasets = get_datasets(args.dataset)
 
     ##############################################################
@@ -65,10 +72,10 @@ def main(rank: int, world_size: int, args):
         )
     else:
         trainset = datasets.trainset
-    print("subset_size:", len(trainset))
+    logging.info(f"subset_size: {len(trainset)}")
 
     # Model
-    print('==> Building model..')
+    logging.info('==> Building model..')
 
     ##############################################################
     # Encoder
@@ -130,9 +137,6 @@ def main(rank: int, world_size: int, args):
     # Main Loop (Train, Test)
     ##############################################################
 
-    # Date Time String
-    DT_STRING = "".join(str(datetime.now()).split())
-
     if args.distributed:
         ddp_setup(rank, world_size, str(args.port))
 
@@ -156,37 +160,38 @@ def main(rank: int, world_size: int, args):
     )
 
     for epoch in range(0, args.num_epochs):
-        print(f"step: {epoch}")
+        logging.info(f"step: {epoch}")
 
         train_loss = trainer.train()
-        print(f"train_loss: {train_loss}")
+        logging.info(f"train_loss: {train_loss}")
         if not args.distributed or rank == 0:
             wandb.log(
                 data={"train": {
-                "loss": train_loss,
+                    "loss": train_loss,
+                    "lr": optimizer.param_groups[0]["lr"]
                 }},
                 step=epoch
             )
 
         if (args.test_freq > 0) and (not args.distributed or rank == 0) and ((epoch + 1) % args.test_freq == 0):
             test_acc = trainer.test()
-            print(f"test_acc: {test_acc}")
+            logging.info(f"test_acc: {test_acc}")
             wandb.log(
                 data={"test": {
-                "acc": test_acc,
+                    "acc": test_acc
                 }},
                 step=epoch
             )
 
         # Checkpoint Model
         if (args.checkpoint_freq > 0) and ((not args.distributed or rank == 0) and (epoch + 1) % args.checkpoint_freq == 0):
-            trainer.save_checkpoint(prefix=f"{DT_STRING}-{args.dataset}-{args.arch}-{epoch}")
+            trainer.save_checkpoint(prefix=f"{args.name}-{epoch}")
 
     if not args.distributed or rank == 0:
-        print(f"best_test_acc: {trainer.best_acc}")
+        logging.info(f"best_test_acc: {trainer.best_acc}")
         wandb.log(
             data={"test": {
-            "best_acc": trainer.best_acc,
+                "best_acc": trainer.best_acc,
             }}
         )
         wandb.finish(quiet=True)
@@ -224,6 +229,7 @@ if __name__ == "__main__":
     parser.add_argument("--device-ids", nargs = "+", default = None, help = "Specify device ids if using multiple gpus")
     parser.add_argument('--port', type=int, default=random.randint(49152, 65535), help="free port to use")
     parser.add_argument('--seed', type=int, default=0, help="Seed for randomness")
+    parser.add_argument("--logs", type = str, default = "logs/", help = "Logs directory path")
 
     # Parse arguments
     args = parser.parse_args()
@@ -244,6 +250,23 @@ if __name__ == "__main__":
     args.device = device
     args.device_ids = device_ids
     args.distributed = distributed
+    
+    # Date Time String
+    DT_STRING = str(datetime.now())[:-3]
+    args.name = f"{DT_STRING}-{args.dataset}-{args.arch}-seed{args.seed}"
+    
+    # Create directory to save results
+    os.makedirs(args.logs, exist_ok = True)
+    args.log_dir_path = os.path.join(args.logs, args.name)
+    os.makedirs(args.log_dir_path, exist_ok = True)
+    args.log_file_path = os.path.join(args.log_dir_path, "training.log")
+    
+    # Create logger
+    logger, listener = get_logger(args.log_file_path)
+    
+    listener.start()
+    set_logger(rank=0, logger=logger, distributed=False)
+    
     if distributed:
         mp.spawn(
             fn=main, 
@@ -252,3 +275,5 @@ if __name__ == "__main__":
         )
     else:
         main(device, 1, args)
+    
+    listener.stop()
