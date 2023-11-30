@@ -31,7 +31,7 @@ def get_datasets(dataset: str, augment_clf_train=False, add_indices_to_data=Fals
     PATHS = {
         SupportedDatasets.CIFAR10.value: '/data/cifar10/',
         SupportedDatasets.CIFAR100.value: '/data/cifar100/',
-        SupportedDatasets.STL10.value: '/data/stl10/',
+        SupportedDatasets.STL10.value: '/data/',
         SupportedDatasets.TINY_IMAGENET.value: '/data/tiny_imagenet/',
         SupportedDatasets.IMAGENET.value: '/data/ILSVRC/'
     }
