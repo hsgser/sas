@@ -265,7 +265,7 @@ if __name__ == "__main__":
     logger, listener = get_logger(args.log_file_path)
     
     listener.start()
-    set_logger(rank=0, logger=logger, distributed=False)
+    set_logger(rank=0, logger=logger, distributed=distributed)
     
     if distributed:
         mp.spawn(
