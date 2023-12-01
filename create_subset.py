@@ -26,7 +26,7 @@ def get_args():
     parser.add_argument('--dataset', type=str, default=str(SupportedDatasets.CIFAR100.value), help='dataset',
                         choices=[x.value for x in SupportedDatasets])
     parser.add_argument('--device', type=int, default=0, help="GPU number to use")
-    parser.add_argument('--subset-fraction', type=float, help="Size of Subset as fraction (only needed for random subset)")
+    parser.add_argument('--subset-fractions', nargs='+', type=float, help='List of subset sizes')
     parser.add_argument('--net-path', type=str, default="", help="Path to net")
     parser.add_argument('--critic-path', type=str, default="", help="Path to critic")
     parser.add_argument('--subset-path', type=str, default="", help="Path to save subset indices")
@@ -84,17 +84,19 @@ if __name__ == "__main__":
     net = torch.load(args.net_path)
     critic = torch.load(args.critic_path)
     proxy_model = ProxyModel(net, critic)
-        
-    subset_dataset = SASSubsetDataset(
-        dataset=dataset,
-        subset_fraction=args.subset_fraction,
-        num_downstream_classes=num_classes,
-        device=device,
-        proxy_model=proxy_model,
-        approx_latent_class_partition=partition,
-        verbose=True
-    )
     
-    # Save subset to file
-    os.makedirs(args.subset_path, exist_ok=True)
-    subset_dataset.save_to_file(f"{args.subset_path}/{args.dataset}-{args.subset_fraction}-sas-indices.pkl")
+    for frac in args.subset_fractions:
+        print(f"Subset fraction = {frac}")
+        subset_dataset = SASSubsetDataset(
+            dataset=dataset,
+            subset_fraction=frac,
+            num_downstream_classes=num_classes,
+            device=device,
+            proxy_model=proxy_model,
+            approx_latent_class_partition=partition,
+            verbose=True
+        )
+        
+        # Save subset to file
+        os.makedirs(args.subset_path, exist_ok=True)
+        subset_dataset.save_to_file(f"{args.subset_path}/{args.dataset}-{frac}-sas-indices.pkl")
