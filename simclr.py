@@ -36,7 +36,7 @@ def main(rank: int, world_size: int, args):
     
     listener.start()
     set_logger(rank=0, logger=logger, distributed=args.distributed)
-    logger.info(args)
+    logging.info(args)
 
     # WandB Logging
     if not args.distributed or rank == 0:
