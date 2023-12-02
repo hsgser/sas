@@ -30,6 +30,13 @@ def main(rank: int, world_size: int, args):
         device = args.device_ids[rank]
         torch.cuda.set_device(args.device_ids[rank])
         args.lr *= world_size
+    
+    # Create logger
+    logger, listener = get_logger(args.log_file_path)
+    
+    listener.start()
+    set_logger(rank=0, logger=logger, distributed=args.distributed)
+    logger.info(args)
 
     # WandB Logging
     if not args.distributed or rank == 0:
@@ -196,6 +203,8 @@ def main(rank: int, world_size: int, args):
         )
         wandb.finish(quiet=True)
 
+    listener.stop()
+    
     if args.distributed:
         destroy_process_group()
 
@@ -261,12 +270,6 @@ if __name__ == "__main__":
     os.makedirs(args.log_dir_path, exist_ok = True)
     args.log_file_path = os.path.join(args.log_dir_path, "training.log")
     
-    # Create logger
-    logger, listener = get_logger(args.log_file_path)
-    
-    listener.start()
-    set_logger(rank=0, logger=logger, distributed=distributed)
-    
     if distributed:
         mp.spawn(
             fn=main, 
@@ -275,5 +278,3 @@ if __name__ == "__main__":
         )
     else:
         main(device, 1, args)
-    
-    listener.stop()
