@@ -233,7 +233,7 @@ class SASSubsetDataset(BaseSubsetDataset):
         trainloader = torch.utils.data.DataLoader(self.dataset, batch_size=self.pairwise_distance_block_size, shuffle=False, num_workers=2, pin_memory=True)
         with torch.no_grad():
             Z = []
-            for input in trainloader:
+            for input in tqdm(trainloader):
                 Z.append(self.proxy_model(input[0].to(self.device)))
         return torch.cat(Z, dim=0)
     

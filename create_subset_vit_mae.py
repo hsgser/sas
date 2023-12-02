@@ -10,15 +10,16 @@ import torch
 from torch import nn 
 import torchvision
 from torchvision import transforms
+from transformers import ViTMAEForPreTraining
 
 
 class ProxyModel(nn.Module):
-    def __init__(self, net, critic):
+    def __init__(self, net):
         super().__init__()
-        self.net = net
-        self.critic = critic
-    def forward(self, x):
-        return self.critic.project(self.net(x))
+        self.encoder = net.vit
+    def forward(self, inputs):
+        # Take the embedding of the [class] token
+        return self.encoder(inputs).last_hidden_state[:,0,:].squeeze(1)
 
 
 def get_args():
@@ -33,6 +34,7 @@ def get_args():
     parser.add_argument('--proxy-img-size', type=int, default=224, help="Input image size for proxy model")
     parser.add_argument('--proxy-dataset', type=str, default="cifar100", help="Dataset to train proxy model")
     parser.add_argument('--proxy-arch', type=str, default="resnet10", help="Proxy model architecture")
+    parser.add_argument('--proxy-pretrain', type=str, default="", help="Pretrained model name to be loaded from huggingface")
     parser.add_argument('--seed', type=int, default=0, help="Seed for randomness")
     
     return parser.parse_args()
@@ -88,9 +90,8 @@ if __name__ == "__main__":
     )
     
     # Load proxy model
-    net = torch.load(args.net_path)
-    critic = torch.load(args.critic_path)
-    proxy_model = ProxyModel(net, critic)
+    model = ViTMAEForPreTraining.from_pretrained(args.proxy_pretrain)
+    proxy_model = ProxyModel(model)
     
     for frac in args.subset_fractions:
         print(f"Subset fraction = {frac}")
@@ -101,6 +102,7 @@ if __name__ == "__main__":
             device=device,
             proxy_model=proxy_model,
             approx_latent_class_partition=partition,
+            pairwise_distance_block_size=1024,
             verbose=True
         )
         
