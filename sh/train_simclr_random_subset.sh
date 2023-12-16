@@ -7,6 +7,6 @@ do
         --dataset cifar100 \
         --random-subset \
         --subset-fraction $frac \
-        --device-ids 2 3 \
+        --device 0 \
         --seed 0
 done
